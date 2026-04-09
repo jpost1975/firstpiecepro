@@ -335,59 +335,85 @@ function MillingCalc({unit}){
   const MillTab=()=>{
     const [mat,setMat]=useState("Aluminum 6061");
     const [tool,setTool]=useState("carbide");
-    const [dia,setDia]=useState(null);
-    const [flutes,setFlutes]=useState(4);
-    const [custD,setCustD]=useState("");
+    const [dia,setDia]=useState("");
+    const [flutes,setFlutes]=useState("");
+    const [sfmOvr,setSfmOvr]=useState("");
+    const [cl,setCl]=useState("");
     const [doc,setDoc]=useState("");
     const [woc,setWoc]=useState("");
-    const [sfmOvr,setSfmOvr]=useState("");
-    const dias=isIn?TOOL_DIAS_IN:TOOL_DIAS_MM;
-    const effDia=custD?parseFloat(custD)||(dia||0):(dia||dias[2]);
     const matData=SF_MATS[mat];
-    const getCL=()=>{
+    const effDia=parseFloat(dia)||0;
+    const effFlutes=parseFloat(flutes)||0;
+    const speedLabel=isIn?"SFM":"SMM";
+    // Use override if entered, otherwise pull from material table
+    const sfm=sfmOvr?parseFloat(sfmOvr):(matData?matData[isIn?"sfm":"smm"][tool]:0);
+    // Use chip load override if entered, otherwise look up from table by diameter
+    const getTableCL=()=>{
       if(!matData||!effDia)return 0;
       const clTable=isIn?matData.cl:matData.clmm;
       const keys=Object.keys(clTable).map(Number).sort((a,b)=>a-b);
-      let cl=clTable[keys[0]],minD=Infinity;
-      for(const k of keys){const d=Math.abs(k-effDia);if(d<minD){minD=d;cl=clTable[k];}}
-      return cl;
+      let best=clTable[keys[0]],minD=Infinity;
+      for(const k of keys){const d=Math.abs(k-effDia);if(d<minD){minD=d;best=clTable[k];}}
+      return best;
     };
-    const sfm=sfmOvr?parseFloat(sfmOvr):(matData?matData[isIn?"sfm":"smm"][tool]:0);
-    const speedLabel=isIn?"SFM":"SMM";
-    const cl=getCL();
-    const rpm=effDia>0?Math.round((sfm*(isIn?12:1000))/(Math.PI*effDia)):0;
-    const feed=rpm&&cl?parseFloat((rpm*cl*flutes).toFixed(isIn?3:1)):0;
+    const effCl=cl?parseFloat(cl):getTableCL();
+    const rpm=effDia>0&&sfm>0?Math.round((sfm*(isIn?12:1000))/(Math.PI*effDia)):0;
+    const feed=rpm&&effCl&&effFlutes>0?parseFloat((rpm*effCl*effFlutes).toFixed(isIn?3:1)):0;
     const feedLabel=isIn?"IPM":"MMPM";
-    const docV=parseFloat(doc)||effDia*0.5;
-    const wocV=parseFloat(woc)||effDia*0.5;
+    const docV=parseFloat(doc)||0;
+    const wocV=parseFloat(woc)||0;
     const mrr=feed&&docV&&wocV?parseFloat((feed*docV*wocV).toFixed(isIn?4:2)):0;
     const mrrLabel=isIn?"IN³/MIN":"MM³/MIN";
+    const tableCL=getTableCL();
     return(
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"24px"}}>
         <div style={{display:"flex",flexDirection:"column",gap:"14px"}}>
-          <div><Label>MATERIAL</Label><select value={mat} onChange={e=>setMat(e.target.value)} style={SS}>{Object.keys(SF_MATS).map(m=><option key={m}>{m}</option>)}</select></div>
+          <div><Label>MATERIAL (FOR SFM & CHIP LOAD REFERENCE)</Label><select value={mat} onChange={e=>setMat(e.target.value)} style={SS}>{Object.keys(SF_MATS).map(m=><option key={m}>{m}</option>)}</select></div>
           <div><Label>TOOL TYPE</Label><div style={{display:"flex",gap:"8px"}}>{["carbide","hss"].map(t=><button key={t} onClick={()=>setTool(t)} style={{flex:1,padding:"9px",fontFamily:F.mono,fontSize:"10px",letterSpacing:"2px",fontWeight:"700",cursor:"pointer",transition:"all 0.15s",background:tool===t?"#111":"#fff",color:tool===t?"#fff":"#666",border:`1.5px solid ${tool===t?"#111":"#ccc"}`}}>{t.toUpperCase()}</button>)}</div></div>
+          {matData&&<div style={{background:"#f4f4f2",border:"1px solid #e0e0dc",padding:"10px 12px",fontSize:"10px",fontFamily:F.mono}}>
+            <div style={{fontSize:"7px",letterSpacing:"2px",color:"#888",marginBottom:"6px"}}>REFERENCE VALUES FOR {mat.toUpperCase()}</div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"6px"}}>
+              <div><span style={{color:"#888"}}>REC. {speedLabel}: </span><strong>{matData[isIn?"sfm":"smm"][tool]}</strong></div>
+              {effDia>0&&<div><span style={{color:"#888"}}>REC. CHIP LOAD: </span><strong>{tableCL.toFixed(isIn?4:3)}</strong></div>}
+            </div>
+          </div>}
           <div>
-            <Label>DIAMETER ({isIn?"IN":"MM"})</Label>
-            <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:"6px",marginBottom:"8px"}}>{dias.map(d=><button key={d} onClick={()=>{setDia(d);setCustD("");}} style={{padding:"8px 4px",fontFamily:F.mono,fontSize:"11px",fontWeight:"600",cursor:"pointer",transition:"all 0.15s",background:!custD&&dia===d?"#111":"#fff",color:!custD&&dia===d?"#fff":"#555",border:`1.5px solid ${!custD&&dia===d?"#111":"#ccc"}`}}>{isIn?`${d}"`:`${d}mm`}</button>)}</div>
-            <input value={custD} onChange={e=>{setCustD(e.target.value);setDia(null);}} placeholder={isIn?'CUSTOM (e.g. 0.625")':"CUSTOM (e.g. 8mm)"} style={{...ISt,fontSize:"11px"}}/>
+            <Label>TOOL DIAMETER ({isIn?"IN":"MM"})</Label>
+            <input value={dia} onChange={e=>setDia(e.target.value)} placeholder={isIn?"e.g. 0.500":"e.g. 12.0"} style={ISt}/>
           </div>
-          <div><Label>FLUTES</Label><div style={{display:"flex",gap:"8px"}}>{[2,3,4].map(f=><button key={f} onClick={()=>setFlutes(f)} style={{flex:1,padding:"10px",fontFamily:F.mono,fontSize:"14px",fontWeight:"700",cursor:"pointer",transition:"all 0.15s",background:flutes===f?"#111":"#fff",color:flutes===f?"#fff":"#555",border:`1.5px solid ${flutes===f?"#111":"#ccc"}`}}>{f}</button>)}</div></div>
-          <div style={{borderTop:"1.5px solid #e0e0dc",paddingTop:"14px"}}>
-            <Label>OPTIONAL OVERRIDES</Label>
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:"10px"}}>
-              {[{l:`${speedLabel} OVR`,v:sfmOvr,s:setSfmOvr,p:"e.g. 400"},{l:`DOC (${isIn?"IN":"MM"})`,v:doc,s:setDoc,p:isIn?"0.25":"6.0"},{l:`WOC (${isIn?"IN":"MM"})`,v:woc,s:setWoc,p:isIn?"0.25":"6.0"}].map(({l,v,s,p})=>(
+          <div>
+            <Label>NUMBER OF FLUTES</Label>
+            <input value={flutes} onChange={e=>setFlutes(e.target.value)} placeholder="e.g. 4" style={ISt}/>
+          </div>
+          <div>
+            <Label>{speedLabel} (LEAVE BLANK TO USE RECOMMENDED)</Label>
+            <input value={sfmOvr} onChange={e=>setSfmOvr(e.target.value)} placeholder={`Rec: ${matData?matData[isIn?"sfm":"smm"][tool]:""}`} style={ISt}/>
+          </div>
+          <div>
+            <Label>CHIP LOAD / TOOTH ({isIn?"IN":"MM"}) (LEAVE BLANK TO USE RECOMMENDED)</Label>
+            <input value={cl} onChange={e=>setCl(e.target.value)} placeholder={effDia>0?`Rec: ${tableCL.toFixed(isIn?4:3)}`:"Enter diameter first"} style={ISt}/>
+          </div>
+          <div style={{borderTop:"1.5px solid #e0e0dc",paddingTop:"12px"}}>
+            <Label>DOC & WOC (FOR MRR CALCULATION)</Label>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"10px"}}>
+              {[{l:`DOC (${isIn?"IN":"MM"})`,v:doc,s:setDoc,p:isIn?"0.500":"12.0"},{l:`WOC (${isIn?"IN":"MM"})`,v:woc,s:setWoc,p:isIn?"0.250":"6.0"}].map(({l,v,s,p})=>(
                 <div key={l}><div style={{fontSize:"7px",letterSpacing:"2px",color:"#aaa",marginBottom:"4px"}}>{l}</div><input value={v} onChange={e=>s(e.target.value)} placeholder={p} style={{...ISt,fontSize:"11px",padding:"6px 8px"}}/></div>
               ))}
             </div>
           </div>
         </div>
         <div style={{display:"flex",flexDirection:"column",gap:"9px"}}>
-          <ResBox label="SPINDLE SPEED"    val={rpm?rpm.toLocaleString():""} unit="RPM"     big/>
+          <ResBox label="SPINDLE SPEED"    val={rpm?rpm.toLocaleString():""} unit="RPM"      big/>
           <ResBox label="FEED RATE"        val={feed?feed.toLocaleString():""} unit={feedLabel} big/>
-          <ResBox label="CHIP LOAD/TOOTH"  val={cl?cl.toFixed(isIn?4:3):""}  unit={isIn?"IN":"MM"}/>
-          <ResBox label={speedLabel}       val={sfm||""}                      unit={speedLabel}/>
-          <ResBox label="MATERIAL REMOVAL" val={mrr||""}                      unit={mrrLabel}/>
+          <ResBox label="CHIP LOAD/TOOTH"  val={effCl?effCl.toFixed(isIn?4:3):""}  unit={isIn?"IN":"MM"}/>
+          <ResBox label={speedLabel}       val={sfm||""}                           unit={speedLabel}/>
+          <ResBox label="MATERIAL REMOVAL" val={mrr||""}                           unit={mrrLabel}/>
+          <div style={{background:"#f4f4f2",border:"1.5px solid #e0e0dc",padding:"12px 14px"}}>
+            <div style={{fontSize:"8px",letterSpacing:"2px",color:"#888",marginBottom:"8px"}}>FORMULAS</div>
+            {(isIn?[["RPM","(SFM × 12) ÷ (π × DIA)"],["IPM","RPM × CHIP LOAD × FLUTES"],["MRR","IPM × DOC × WOC"]]:[["RPM","(SMM × 1000) ÷ (π × DIA)"],["MMPM","RPM × CL × FLUTES"],["MRR","MMPM × DOC × WOC"]]).map(([l,f])=>(
+              <div key={l} style={{display:"flex",gap:"8px",marginBottom:"4px",fontSize:"10px"}}><span style={{fontWeight:"700",width:"40px"}}>{l}</span><span style={{color:"#666"}}>= {f}</span></div>
+            ))}
+          </div>
           <div style={{fontSize:"10px",color:"#888",lineHeight:"1.6",fontFamily:F.sans,padding:"10px 12px",background:"#fff",border:"1px solid #e8e8e4"}}>⚠ Starting point values. Adjust for rigidity, tool condition, and coolant.</div>
         </div>
       </div>
@@ -398,13 +424,11 @@ function MillingCalc({unit}){
   const DrillTab=()=>{
     const [mat,setMat]=useState("Aluminum 6061");
     const [tool,setTool]=useState("carbide");
-    const [dia,setDia]=useState(null);
-    const [custD,setCustD]=useState("");
+    const [dia,setDia]=useState("");
     const [sfmOvr,setSfmOvr]=useState("");
     const [feedOvr,setFeedOvr]=useState("");
     const [depth,setDepth]=useState("");
-    const dias=isIn?TOOL_DIAS_IN:TOOL_DIAS_MM;
-    const effDia=custD?parseFloat(custD)||(dia||0):(dia||dias[2]);
+    const effDia=parseFloat(dia)||0;
     const matData=DRILL_MATS[mat];
     const getFeed=()=>{
       if(!matData||!effDia)return 0;
@@ -429,8 +453,8 @@ function MillingCalc({unit}){
           <div><Label>DRILL TYPE</Label><div style={{display:"flex",gap:"8px"}}>{["carbide","hss"].map(t=><button key={t} onClick={()=>setTool(t)} style={{flex:1,padding:"9px",fontFamily:F.mono,fontSize:"10px",letterSpacing:"2px",fontWeight:"700",cursor:"pointer",transition:"all 0.15s",background:tool===t?"#111":"#fff",color:tool===t?"#fff":"#666",border:`1.5px solid ${tool===t?"#111":"#ccc"}`}}>{t.toUpperCase()}</button>)}</div></div>
           <div>
             <Label>DRILL DIAMETER ({isIn?"IN":"MM"})</Label>
-            <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:"6px",marginBottom:"8px"}}>{dias.map(d=><button key={d} onClick={()=>{setDia(d);setCustD("");}} style={{padding:"8px 4px",fontFamily:F.mono,fontSize:"11px",fontWeight:"600",cursor:"pointer",transition:"all 0.15s",background:!custD&&dia===d?"#111":"#fff",color:!custD&&dia===d?"#fff":"#555",border:`1.5px solid ${!custD&&dia===d?"#111":"#ccc"}`}}>{isIn?`${d}"`:`${d}mm`}</button>)}</div>
-            <input value={custD} onChange={e=>{setCustD(e.target.value);setDia(null);}} placeholder={isIn?'CUSTOM (e.g. 0.25")':"CUSTOM (e.g. 6.5mm)"} style={{...ISt,fontSize:"11px"}}/>
+            <input value={dia} onChange={e=>setDia(e.target.value)} placeholder={isIn?'e.g. 0.250 (1/4")':"e.g. 6.5mm"} style={ISt}/>
+            {effDia>0&&matData&&<div style={{fontSize:"9px",color:"#888",marginTop:"4px",fontFamily:F.sans}}>Rec. SFM: {matData[isIn?"sfm":"smm"][tool]} · Rec. feed: {feedRec.toFixed(isIn?4:3)} {isIn?"IPR":"MMPR"}</div>}
           </div>
           <div style={{borderTop:"1.5px solid #e0e0dc",paddingTop:"14px"}}>
             <Label>OPTIONAL OVERRIDES</Label>
@@ -562,7 +586,7 @@ function MillingCalc({unit}){
             <Label>CHIP LOAD / TOOTH ({isIn?"IN":"MM"})</Label>
             <input value={cl} onChange={e=>setCl(e.target.value)} placeholder={isIn?"e.g. 0.005":"e.g. 0.13"} style={ISt}/>
           </div>
-          <div><Label>FLUTES</Label><div style={{display:"flex",gap:"8px"}}>{[2,3,4,5,6].map(f=><button key={f} onClick={()=>setFlutes(f)} style={{flex:1,padding:"8px 4px",fontFamily:F.mono,fontSize:"13px",fontWeight:"700",cursor:"pointer",transition:"all 0.15s",background:flutes===f?"#111":"#fff",color:flutes===f?"#fff":"#555",border:`1.5px solid ${flutes===f?"#111":"#ccc"}`}}>{f}</button>)}</div></div>
+          <div><Label>FLUTES</Label><input value={flutes} onChange={e=>setFlutes(e.target.value)} placeholder="e.g. 4" style={ISt}/></div>
           <div style={{borderTop:"1.5px solid #e0e0dc",paddingTop:"12px"}}>
             <Label>DOC & WOC (FOR MRR + CHIP THINNING)</Label>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"10px"}}>
