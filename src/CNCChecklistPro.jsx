@@ -650,80 +650,80 @@ function TurningCalc({unit}){
   const isIn=unit==="inch";
   const [mat,setMat]=useState("Aluminum 6061");
   const [tool,setTool]=useState("carbide");
-  const [mode,setMode]=useState("rough"); // rough | finish
   const [dia,setDia]=useState("");
   const [sfmOvr,setSfmOvr]=useState("");
   const [feedOvr,setFeedOvr]=useState("");
   const [doc,setDoc]=useState("");
+  const SS={...ISt,padding:"8px 10px",cursor:"pointer"};
 
   const matData=TURN_MATS[mat];
   const effDia=parseFloat(dia)||0;
-  const sfm=sfmOvr?parseFloat(sfmOvr):(matData?matData[isIn?"sfm":"smm"][tool]:0);
+  const sfmRec=matData?matData[isIn?"sfm":"smm"][tool]:0;
+  const feedRecRough=matData?(isIn?matData.ipr.rough:matData.mmpr.rough):0;
+  const feedRecFinish=matData?(isIn?matData.ipr.finish:matData.mmpr.finish):0;
   const speedLabel=isIn?"SFM":"SMM";
-  const feedRec=matData?(isIn?matData.ipr[mode]:matData.mmpr[mode]):0;
-  const feed=feedOvr?parseFloat(feedOvr):feedRec;
-  const feedLabel=isIn?"IPR":"MMPR";
-  const feedUnit=isIn?"IN/REV":"MM/REV";
-
-  // RPM: inch: (SFM*12)/(π*dia_in) | metric: (SMM*1000)/(π*dia_mm)
-  const rpm=effDia>0?Math.round((sfm*(isIn?12:1000))/(Math.PI*effDia)):0;
+  const feedUnit=isIn?"IPR":"MMPR";
+  const sfm=sfmOvr?parseFloat(sfmOvr):sfmRec;
+  const feed=feedOvr?parseFloat(feedOvr):feedRecRough;
+  const rpm=effDia>0&&sfm>0?Math.round((sfm*(isIn?12:1000))/(Math.PI*effDia)):0;
   const ipm=rpm&&feed?parseFloat((rpm*feed).toFixed(isIn?3:1)):0;
-  const feedRateLabel=isIn?"IPM":"MMPM";
-  const docVal=parseFloat(doc)||(isIn?0.050:1.27);
-  const mrr=ipm&&docVal&&effDia?parseFloat((ipm*docVal).toFixed(isIn?4:2)):0;
-  const mrrLabel=isIn?"IN³/MIN":"MM³/MIN";
-
-  const SS={...ISt,padding:"8px 10px",cursor:"pointer"};
+  const docVal=parseFloat(doc)||0;
+  const mrr=ipm&&docVal?parseFloat((ipm*docVal).toFixed(isIn?4:2)):0;
 
   return(
     <div style={{maxWidth:"820px",margin:"0 auto",padding:"24px"}}>
       <div style={{fontSize:"10px",letterSpacing:"3px",fontWeight:"700",marginBottom:"20px"}}>TURNING — SPEEDS & FEEDS ({isIn?"INCH":"METRIC"})</div>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"24px"}}>
         <div style={{display:"flex",flexDirection:"column",gap:"14px"}}>
-          <div><Label>MATERIAL</Label><select value={mat} onChange={e=>setMat(e.target.value)} style={SS}>{Object.keys(TURN_MATS).map(m=><option key={m}>{m}</option>)}</select></div>
+          <div><Label>MATERIAL (FOR SFM & FEED REFERENCE)</Label><select value={mat} onChange={e=>setMat(e.target.value)} style={SS}>{Object.keys(TURN_MATS).map(m=><option key={m}>{m}</option>)}</select></div>
           <div><Label>INSERT TYPE</Label><div style={{display:"flex",gap:"8px"}}>{["carbide","hss"].map(t=><button key={t} onClick={()=>setTool(t)} style={{flex:1,padding:"9px",fontFamily:F.mono,fontSize:"10px",letterSpacing:"2px",fontWeight:"700",cursor:"pointer",transition:"all 0.15s",background:tool===t?"#111":"#fff",color:tool===t?"#fff":"#666",border:`1.5px solid ${tool===t?"#111":"#ccc"}`}}>{t.toUpperCase()}</button>)}</div></div>
-          <div><Label>OPERATION</Label><div style={{display:"flex",gap:"8px"}}>{["rough","finish"].map(m=><button key={m} onClick={()=>setMode(m)} style={{flex:1,padding:"9px",fontFamily:F.mono,fontSize:"10px",letterSpacing:"2px",fontWeight:"700",cursor:"pointer",transition:"all 0.15s",background:mode===m?"#111":"#fff",color:mode===m?"#fff":"#666",border:`1.5px solid ${mode===m?"#111":"#ccc"}`}}>{m.toUpperCase()}</button>)}</div></div>
+          {matData&&<div style={{background:"#f4f4f2",border:"1px solid #e0e0dc",padding:"10px 12px",fontSize:"10px",fontFamily:F.mono}}>
+            <div style={{fontSize:"7px",letterSpacing:"2px",color:"#888",marginBottom:"6px"}}>REFERENCE VALUES FOR {mat.toUpperCase()}</div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"6px"}}>
+              <div><span style={{color:"#888"}}>REC. {speedLabel}: </span><strong>{sfmRec}</strong></div>
+              <div><span style={{color:"#888"}}>ROUGH FEED: </span><strong>{feedRecRough} {feedUnit}</strong></div>
+              <div><span style={{color:"#888"}}>FINISH FEED: </span><strong>{feedRecFinish} {feedUnit}</strong></div>
+            </div>
+          </div>}
           <div>
-            <Label>WORKPIECE DIAMETER ({isIn?"INCHES":"MM"})</Label>
+            <Label>WORKPIECE DIAMETER ({isIn?"IN":"MM"})</Label>
             <input value={dia} onChange={e=>setDia(e.target.value)} placeholder={isIn?"e.g. 2.500":"e.g. 63.5"} style={ISt}/>
             {effDia>0&&<div style={{fontSize:"9px",color:"#888",marginTop:"4px",fontFamily:F.sans}}>{isIn?`= ${inToMm(effDia).toFixed(2)}mm`:`= ${mmToIn(effDia).toFixed(4)}"`}</div>}
           </div>
-          <div style={{borderTop:"1.5px solid #e0e0dc",paddingTop:"14px"}}>
-            <Label>OPTIONAL OVERRIDES</Label>
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:"10px"}}>
-              {[{l:`${speedLabel} OVERRIDE`,v:sfmOvr,s:setSfmOvr,p:"e.g. 500"},{l:`FEED OVERRIDE (${feedUnit})`,v:feedOvr,s:setFeedOvr,p:isIn?"0.008":"0.20"},{l:`DOC (${isIn?"IN":"MM"})`,v:doc,s:setDoc,p:isIn?"0.050":"1.27"}].map(({l,v,s,p})=>(
-                <div key={l}><div style={{fontSize:"7px",letterSpacing:"2px",color:"#aaa",marginBottom:"4px"}}>{l}</div><input value={v} onChange={e=>s(e.target.value)} placeholder={p} style={{...ISt,fontSize:"11px",padding:"6px 8px"}}/></div>
-              ))}
-            </div>
+          <div>
+            <Label>{speedLabel} (LEAVE BLANK TO USE RECOMMENDED)</Label>
+            <input value={sfmOvr} onChange={e=>setSfmOvr(e.target.value)} placeholder={`Rec: ${sfmRec}`} style={ISt}/>
+          </div>
+          <div>
+            <Label>FEED / REV ({feedUnit}) (LEAVE BLANK TO USE ROUGH REC.)</Label>
+            <input value={feedOvr} onChange={e=>setFeedOvr(e.target.value)} placeholder={`Rough: ${feedRecRough} · Finish: ${feedRecFinish}`} style={ISt}/>
+          </div>
+          <div>
+            <Label>DEPTH OF CUT ({isIn?"IN":"MM"}) — FOR MRR</Label>
+            <input value={doc} onChange={e=>setDoc(e.target.value)} placeholder={isIn?"e.g. 0.050":"e.g. 1.27"} style={ISt}/>
           </div>
         </div>
 
         <div style={{display:"flex",flexDirection:"column",gap:"9px"}}>
-          <ResBox label="SPINDLE SPEED"    val={rpm?rpm.toLocaleString():""} unit="RPM"         big/>
-          <ResBox label="FEED RATE"        val={ipm?ipm.toLocaleString():""} unit={feedRateLabel} big/>
-          <ResBox label={`${speedLabel} (RECOMMENDED)`} val={sfm||""} unit={speedLabel}/>
-          <ResBox label={`FEED (RECOMMENDED)`} val={feedRec?feedRec.toFixed(isIn?3:2):""} unit={feedUnit}/>
-          <ResBox label="MATERIAL REMOVAL" val={mrr||""}             unit={mrrLabel}/>
+          <ResBox label="SPINDLE SPEED"    val={rpm?rpm.toLocaleString():""} unit="RPM"  big/>
+          <ResBox label="FEED RATE"        val={ipm?ipm.toLocaleString():""} unit={isIn?"IPM":"MMPM"} big/>
+          <ResBox label={`${speedLabel} USED`}     val={sfm||""}               unit={speedLabel}/>
+          <ResBox label={`FEED / REV USED`}        val={feed||""}               unit={feedUnit}/>
+          <ResBox label="MATERIAL REMOVAL RATE"    val={mrr||""}               unit={isIn?"IN³/MIN":"MM³/MIN"}/>
 
           <div style={{background:"#f4f4f2",border:"1.5px solid #e0e0dc",padding:"12px 14px"}}>
-            <div style={{fontSize:"8px",letterSpacing:"2px",color:"#888",marginBottom:"8px"}}>FORMULAS</div>
-            {(isIn?[["RPM","(SFM × 12) ÷ (π × DIA)"],["IPM","RPM × IPR"],["MRR","IPM × DOC × DIA (approx)"]]:[["RPM","(SMM × 1000) ÷ (π × DIA)"],["MMPM","RPM × MMPR"],["MRR","MMPM × DOC × DIA (approx)"]]).map(([l,f])=>(
-              <div key={l} style={{display:"flex",gap:"8px",marginBottom:"4px",fontSize:"10px"}}><span style={{fontWeight:"700",width:"40px"}}>{l}</span><span style={{color:"#666"}}>= {f}</span></div>
-            ))}
-          </div>
-
-          <div style={{background:"#fff",border:"1.5px solid #e0e0dc",padding:"12px 14px"}}>
             <div style={{fontSize:"8px",letterSpacing:"2px",color:"#888",marginBottom:"8px"}}>TURNING TIPS</div>
-            {[["Rough","Higher feed, heavier DOC, sacrifices surface finish"],["Finish","Light DOC (0.005–0.020\"), slower feed, sharp nose radius"],["Coolant","Always use with steel and stainless. Flood preferred."],["Chatter","Reduce tool overhang, increase feed, check chuck grip"]].map(([t,d])=>(
+            {[["Rough vs. finish","Use reference box above for both. Type finish feed in override field when finishing."],["Nose radius","Larger nose radius = better finish but more chatter risk on thin parts"],["Coolant","Always use with steel and stainless. Flood preferred over mist"],["Chatter","Reduce tool overhang, increase feed, check chuck grip and tailstock"]].map(([t,d])=>(
               <div key={t} style={{marginBottom:"6px"}}><span style={{fontSize:"9px",fontWeight:"700",color:"#111"}}>{t}: </span><span style={{fontSize:"9px",color:"#666",fontFamily:F.sans}}>{d}</span></div>
             ))}
           </div>
-          <div style={{fontSize:"10px",color:"#888",lineHeight:"1.6",fontFamily:F.sans,padding:"10px 12px",background:"#fff",border:"1px solid #e8e8e4"}}>⚠ Starting point values. Adjust for machine rigidity, insert grade, nose radius, and setup.</div>
+          <div style={{fontSize:"10px",color:"#888",lineHeight:"1.6",fontFamily:F.sans,padding:"10px 12px",background:"#fff",border:"1px solid #e8e8e4"}}>⚠ Starting point values. Adjust for insert grade, nose radius, and setup rigidity.</div>
         </div>
       </div>
     </div>
   );
 }
+
 
 // ─── TRUE POSITION CALCULATOR ─────────────────────────────────────────────────
 function TruePosCalc({unit}){
