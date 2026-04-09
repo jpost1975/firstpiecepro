@@ -430,7 +430,7 @@ function MillingCalc({unit}){
     const [depth,setDepth]=useState("");
     const effDia=parseFloat(dia)||0;
     const matData=DRILL_MATS[mat];
-    const getFeed=()=>{
+    const getTableFeed=()=>{
       if(!matData||!effDia)return 0;
       const ft=isIn?matData.ipr:matData.mmpr;
       const keys=Object.keys(ft).map(Number).sort((a,b)=>a-b);
@@ -438,10 +438,11 @@ function MillingCalc({unit}){
       for(const k of keys){const d=Math.abs(k-effDia);if(d<minD){minD=d;f=ft[k];}}
       return f;
     };
-    const sfm=sfmOvr?parseFloat(sfmOvr):(matData?matData[isIn?"sfm":"smm"][tool]:0);
-    const feedRec=getFeed();
+    const sfmRec=matData?matData[isIn?"sfm":"smm"][tool]:0;
+    const feedRec=getTableFeed();
+    const sfm=sfmOvr?parseFloat(sfmOvr):sfmRec;
     const feed=feedOvr?parseFloat(feedOvr):feedRec;
-    const rpm=effDia>0?Math.round((sfm*(isIn?12:1000))/(Math.PI*effDia)):0;
+    const rpm=effDia>0&&sfm>0?Math.round((sfm*(isIn?12:1000))/(Math.PI*effDia)):0;
     const ipm=rpm&&feed?parseFloat((rpm*feed).toFixed(isIn?3:1)):0;
     const depthV=parseFloat(depth)||effDia*3;
     const cycleTime=ipm?parseFloat((depthV/ipm*60).toFixed(1)):0;
@@ -449,32 +450,42 @@ function MillingCalc({unit}){
     return(
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"24px"}}>
         <div style={{display:"flex",flexDirection:"column",gap:"14px"}}>
-          <div><Label>MATERIAL</Label><select value={mat} onChange={e=>setMat(e.target.value)} style={SS}>{Object.keys(DRILL_MATS).map(m=><option key={m}>{m}</option>)}</select></div>
+          <div><Label>MATERIAL (FOR SFM & FEED REFERENCE)</Label><select value={mat} onChange={e=>setMat(e.target.value)} style={SS}>{Object.keys(DRILL_MATS).map(m=><option key={m}>{m}</option>)}</select></div>
           <div><Label>DRILL TYPE</Label><div style={{display:"flex",gap:"8px"}}>{["carbide","hss"].map(t=><button key={t} onClick={()=>setTool(t)} style={{flex:1,padding:"9px",fontFamily:F.mono,fontSize:"10px",letterSpacing:"2px",fontWeight:"700",cursor:"pointer",transition:"all 0.15s",background:tool===t?"#111":"#fff",color:tool===t?"#fff":"#666",border:`1.5px solid ${tool===t?"#111":"#ccc"}`}}>{t.toUpperCase()}</button>)}</div></div>
+          {matData&&<div style={{background:"#f4f4f2",border:"1px solid #e0e0dc",padding:"10px 12px",fontSize:"10px",fontFamily:F.mono}}>
+            <div style={{fontSize:"7px",letterSpacing:"2px",color:"#888",marginBottom:"6px"}}>REFERENCE VALUES FOR {mat.toUpperCase()}</div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"6px"}}>
+              <div><span style={{color:"#888"}}>REC. {isIn?"SFM":"SMM"}: </span><strong>{sfmRec}</strong></div>
+              {effDia>0&&<div><span style={{color:"#888"}}>REC. FEED: </span><strong>{feedRec.toFixed(isIn?4:3)} {isIn?"IPR":"MMPR"}</strong></div>}
+            </div>
+          </div>}
           <div>
             <Label>DRILL DIAMETER ({isIn?"IN":"MM"})</Label>
-            <input value={dia} onChange={e=>setDia(e.target.value)} placeholder={isIn?'e.g. 0.250 (1/4")':"e.g. 6.5mm"} style={ISt}/>
-            {effDia>0&&matData&&<div style={{fontSize:"9px",color:"#888",marginTop:"4px",fontFamily:F.sans}}>Rec. SFM: {matData[isIn?"sfm":"smm"][tool]} · Rec. feed: {feedRec.toFixed(isIn?4:3)} {isIn?"IPR":"MMPR"}</div>}
+            <input value={dia} onChange={e=>setDia(e.target.value)} placeholder={isIn?'e.g. 0.250 (1/4")':"e.g. 6.5"} style={ISt}/>
           </div>
-          <div style={{borderTop:"1.5px solid #e0e0dc",paddingTop:"14px"}}>
-            <Label>OPTIONAL OVERRIDES</Label>
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:"10px"}}>
-              {[{l:`SFM OVR`,v:sfmOvr,s:setSfmOvr,p:"e.g. 200"},{l:`FEED OVR (${isIn?"IPR":"MMPR"})`,v:feedOvr,s:setFeedOvr,p:isIn?"0.004":"0.10"},{l:`DEPTH (${isIn?"IN":"MM"})`,v:depth,s:setDepth,p:isIn?"1.000":"25.0"}].map(({l,v,s,p})=>(
-                <div key={l}><div style={{fontSize:"7px",letterSpacing:"2px",color:"#aaa",marginBottom:"4px"}}>{l}</div><input value={v} onChange={e=>s(e.target.value)} placeholder={p} style={{...ISt,fontSize:"11px",padding:"6px 8px"}}/></div>
-              ))}
-            </div>
+          <div>
+            <Label>{isIn?"SFM":"SMM"} (LEAVE BLANK TO USE RECOMMENDED)</Label>
+            <input value={sfmOvr} onChange={e=>setSfmOvr(e.target.value)} placeholder={`Rec: ${sfmRec}`} style={ISt}/>
+          </div>
+          <div>
+            <Label>FEED / REV ({isIn?"IPR":"MMPR"}) (LEAVE BLANK TO USE RECOMMENDED)</Label>
+            <input value={feedOvr} onChange={e=>setFeedOvr(e.target.value)} placeholder={effDia>0?`Rec: ${feedRec.toFixed(isIn?4:3)}`:"Enter diameter first"} style={ISt}/>
+          </div>
+          <div>
+            <Label>HOLE DEPTH ({isIn?"IN":"MM"}) — FOR CYCLE TIME</Label>
+            <input value={depth} onChange={e=>setDepth(e.target.value)} placeholder={isIn?"e.g. 1.000":"e.g. 25.0"} style={ISt}/>
           </div>
         </div>
         <div style={{display:"flex",flexDirection:"column",gap:"9px"}}>
           <ResBox label="SPINDLE SPEED"       val={rpm?rpm.toLocaleString():""} unit="RPM"  big/>
           <ResBox label="FEED RATE"           val={ipm?ipm.toLocaleString():""} unit={isIn?"IPM":"MMPM"} big/>
-          <ResBox label="FEED / REV (REC.)"   val={feedRec?feedRec.toFixed(isIn?4:3):""} unit={isIn?"IPR":"MMPR"}/>
-          <ResBox label="SFM (RECOMMENDED)"   val={sfm||""} unit={isIn?"SFM":"SMM"}/>
+          <ResBox label="FEED / REV"          val={feed?feed.toFixed(isIn?4:3):""} unit={isIn?"IPR":"MMPR"}/>
+          <ResBox label={isIn?"SFM":"SMM"}    val={sfm||""} unit={isIn?"SFM":"SMM"}/>
           <ResBox label="DRILL POINT LENGTH"  val={pointLen||""} unit={isIn?"IN":"MM"}/>
           <ResBox label="CYCLE TIME (APPROX)" val={cycleTime||""} unit="SEC"/>
           <div style={{background:"#f4f4f2",border:"1.5px solid #e0e0dc",padding:"12px 14px"}}>
             <div style={{fontSize:"8px",letterSpacing:"2px",color:"#888",marginBottom:"8px"}}>DRILLING TIPS</div>
-            {[["Peck drilling","Use for depth > 3× diameter to clear chips"],["Coolant","Through-coolant or flood strongly recommended"],["Point angle","118° standard, 135° split point for harder materials"],["Feed rate","Reduce 50% at breakthrough to prevent grab"]].map(([t,d])=>(
+            {[["Peck drilling","Use for depth > 3× diameter to clear chips"],["Coolant","Through-coolant or flood strongly recommended"],["Point angle","118° standard, 135° split point for harder materials"],["Breakthrough","Reduce feed 50% as drill exits to prevent grab"]].map(([t,d])=>(
               <div key={t} style={{marginBottom:"5px"}}><span style={{fontSize:"9px",fontWeight:"700",color:"#111"}}>{t}: </span><span style={{fontSize:"9px",color:"#666",fontFamily:F.sans}}>{d}</span></div>
             ))}
           </div>
